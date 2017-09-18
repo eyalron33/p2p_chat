@@ -246,7 +246,7 @@ void bind_events(socket::ptr &socket) {
                        }));
 }
 
-static void cb_candidate_gathering_done(NiceAgent *agent, guint _stream_id, gpointer data) {
+static void cb_candidate_gathering_done(NiceAgent *agent, guint stream_id, gpointer data) {
 
   gboolean bool_controlling_mode;
   g_object_get(agent,"controlling-mode", &bool_controlling_mode, NULL);
@@ -256,7 +256,7 @@ static void cb_candidate_gathering_done(NiceAgent *agent, guint _stream_id, gpoi
   g_debug("SIGNAL candidate gathering done\n");
 
   // Candidate gathering is done. Send our local candidates on stdout
-  gather_local_data(agent, _stream_id, 1, candidate_data);
+  gather_local_data(agent, stream_id, 1, candidate_data);
   _candidate_data[controlling_mode] = std::to_string(controlling_mode) + candidate_data;
   if (!controlling_mode) {
     printf("Broadcasting local connection data.\n");
@@ -302,7 +302,7 @@ static gboolean stdin_remote_info_cb (gpointer data)
   return ret;
 }
 
-static void cb_component_state_changed(NiceAgent *agent, guint _stream_id,
+static void cb_component_state_changed(NiceAgent *agent, guint stream_id,
     guint component_id, guint state,
     gpointer data) {
 
@@ -311,15 +311,15 @@ static void cb_component_state_changed(NiceAgent *agent, guint _stream_id,
   guint controlling_mode = bool_controlling_mode ? 1 : 0;
 
   printf("SIGNAL: state of agent %d changed %d %d %s[%d]\n",
-      controlling_mode, _stream_id, component_id, state_name[state], state);
+      controlling_mode, stream_id, component_id, state_name[state], state);
   g_debug("SIGNAL: state state of agent %d changed %d %d %s[%d]\n",
-      controlling_mode, _stream_id, component_id, state_name[state], state);
+      controlling_mode, stream_id, component_id, state_name[state], state);
 
   if (state == NICE_COMPONENT_STATE_CONNECTED) {
     NiceCandidate *local, *remote;
 
     // Get current selected candidate pair and print IP address used
-    if (nice_agent_get_selected_pair (agent, _stream_id, component_id,
+    if (nice_agent_get_selected_pair (agent, stream_id, component_id,
                 &local, &remote)) {
       gchar ipaddr[INET6_ADDRSTRLEN];
 
@@ -366,12 +366,12 @@ static gboolean stdin_send_data_cb (GIOChannel *source, GIOCondition cond,
   return TRUE;
 }
 
-static void cb_new_selected_pair(NiceAgent *agent, guint _stream_id,
+static void cb_new_selected_pair(NiceAgent *agent, guint stream_id,
     guint component_id, gchar *lfoundation, gchar *rfoundation, gpointer data) {
   g_debug("SIGNAL: selected pair %s %s", lfoundation, rfoundation);
 }
 
-static void cb_nice_recv(NiceAgent *agent, guint _stream_id, guint component_id,
+static void cb_nice_recv(NiceAgent *agent, guint stream_id, guint component_id,
     guint len, gchar *buf, gpointer data) {
   if (len == 1 && buf[0] == '\0')
     g_main_loop_quit (gloop);
@@ -380,7 +380,7 @@ static void cb_nice_recv(NiceAgent *agent, guint _stream_id, guint component_id,
   fflush(stdout);
 }
 
-static NiceCandidate * parse_candidate(char *scand, guint _stream_id) {
+static NiceCandidate * parse_candidate(char *scand, guint stream_id) {
   NiceCandidate *cand = NULL;
   NiceCandidateType ntype;
   gchar **tokens = NULL;
@@ -402,7 +402,7 @@ static NiceCandidate * parse_candidate(char *scand, guint _stream_id) {
 
   cand = nice_candidate_new(ntype);
   cand->component_id = 1;
-  cand->stream_id = _stream_id;
+  cand->stream_id = stream_id;
   cand->transport = NICE_CANDIDATE_TRANSPORT_UDP;
   strncpy(cand->foundation, tokens[0], NICE_CANDIDATE_MAX_FOUNDATION);
   cand->foundation[NICE_CANDIDATE_MAX_FOUNDATION - 1] = 0;
@@ -424,7 +424,7 @@ static NiceCandidate * parse_candidate(char *scand, guint _stream_id) {
 }
 
 
-static int gather_local_data (NiceAgent *agent, guint _stream_id, guint component_id, std::string & stun) {
+static int gather_local_data (NiceAgent *agent, guint stream_id, guint component_id, std::string & stun) {
   
   int result = EXIT_FAILURE;
   gchar *local_ufrag = NULL;
@@ -432,11 +432,11 @@ static int gather_local_data (NiceAgent *agent, guint _stream_id, guint componen
   gchar ipaddr[INET6_ADDRSTRLEN];
   GSList *cands = NULL, *item;
 
-  if (!nice_agent_get_local_credentials(agent, _stream_id,
+  if (!nice_agent_get_local_credentials(agent, stream_id,
       &local_ufrag, &local_password))
     goto end;
 
-  cands = nice_agent_get_local_candidates(agent, _stream_id, component_id);
+  cands = nice_agent_get_local_candidates(agent, stream_id, component_id);
   if (cands == NULL)
     goto end;
 
@@ -466,7 +466,7 @@ static int gather_local_data (NiceAgent *agent, guint _stream_id, guint componen
 
 
 
-static int parse_remote_data(NiceAgent *agent, guint _stream_id,
+static int parse_remote_data(NiceAgent *agent, guint stream_id,
     guint component_id, const char *line){
   GSList *remote_candidates = NULL;
   gchar **line_argv = NULL;
@@ -488,7 +488,7 @@ static int parse_remote_data(NiceAgent *agent, guint _stream_id,
       passwd = line_argv[i];
     } else {
       // Remaining args are serialized canidates (at least one is required)
-      NiceCandidate *c = parse_candidate(line_argv[i], _stream_id);
+      NiceCandidate *c = parse_candidate(line_argv[i], stream_id);
 
       if (c == NULL) {
         g_message("failed to parse candidate: %s", line_argv[i]);
@@ -502,13 +502,13 @@ static int parse_remote_data(NiceAgent *agent, guint _stream_id,
     goto end;
   }
 
-  if (!nice_agent_set_remote_credentials(agent, _stream_id, ufrag, passwd)) {
+  if (!nice_agent_set_remote_credentials(agent, stream_id, ufrag, passwd)) {
     g_message("failed to set remote credentials");
     goto end;
   }
 
   // Note: this will trigger the start of negotiation.
-  if (nice_agent_set_remote_candidates(agent, _stream_id, component_id,
+  if (nice_agent_set_remote_candidates(agent, stream_id, component_id,
       remote_candidates) < 1) {
     g_message("failed to set remote candidates");
     goto end;
